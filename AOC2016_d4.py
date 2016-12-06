@@ -1,4 +1,5 @@
 from operator import itemgetter, attrgetter, methodcaller
+import sys
 sector_id_sum = 0
 num_rooms = 0
 with open('d4input.txt', 'r') as f:
@@ -23,7 +24,15 @@ with open('d4input.txt', 'r') as f:
         cs_code = cs[1].split(']')[0]
         if s == cs_code:
             sector_id_sum += int(cs_id)
-            print(line)
+            #sys.stdout.write(line)
+            s = str()
+            for part in line.split('-')[:-1]:
+                for c in part:
+                    s = s + chr(97 + ((ord(c)-97 + int(cs_id)) % 26))
+                s = s + ' '
+            if s.find('north') != -1:
+                print(s)
+                print(line)
             num_rooms += 1
 
 print(sector_id_sum)
