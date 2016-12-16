@@ -1,6 +1,7 @@
 import collections
 import itertools
 import copy
+import multiprocessing
 
 devices = {} 
 devices['A'] = ('polonium', 'g')
@@ -15,7 +16,15 @@ devices['H'] = ('promethium', 'm')
 devices['I'] = ('ruthenium', 'm')
 devices['J'] = ('cobalt', 'm')
 
+devices['K'] = ('elerium', 'g')
+devices['L'] = ('elerium', 'm')
+devices['M'] = ('dilithium', 'g')
+devices['N'] = ('dilithium', 'm')
+
+
 NOT_SAFE = 9999999
+MAX_FLOOR = 4
+MIN_FLOOR = 1 
 
 def eval_cost(diagram):
     isSafe = True
@@ -40,53 +49,70 @@ def eval_cost(diagram):
         if(not isSafe): break
     return cost
 
-def create_adjacent_positions(diagram, max_floor, min_floor):
-    moves = []
+def create_adjacent_positions(diagram, max_floor=MAX_FLOOR, min_floor=MIN_FLOOR):
     e_pos = diagram.e_pos
     dg = diagram.dg
     for device_1 in dg[e_pos-1]:
         if e_pos + 1 <= max_floor:
-            moves.append(make_diagram(dg, [device_1], e_pos, e_pos+1))
+            yield make_diagram(dg, [device_1], e_pos, e_pos+1)
         if e_pos - 1  >= min_floor:
-            moves.append(make_diagram(dg, [device_1], e_pos, e_pos-1))
+            yield make_diagram(dg, [device_1], e_pos, e_pos-1)
     for devices in itertools.combinations(dg[e_pos-1], 2):
         if e_pos + 1 <= max_floor:
-            moves.append(make_diagram(dg, devices,e_pos, e_pos+1))
+            yield make_diagram(dg, devices,e_pos, e_pos+1)
         if e_pos - 1  >= min_floor:
-            moves.append(make_diagram(dg, devices, e_pos, e_pos-1))
-    return moves
+            yield make_diagram(dg, devices, e_pos, e_pos-1)
 
 def make_diagram(diagram, devices, before, after):
-    dg = copy.deepcopy(diagram)
+    dg = [f for f in diagram]
     for d in devices:
-        dg[after-1].append(d)
-        dg[after-1].sort()
-        dg[before-1].remove(d)
-        dg[before-1].sort()
+        dg[after-1] += d
+        dg[before-1] = dg[before-1].replace(d, '')
+    dg[after-1] = ''.join(sorted(dg[after-1]))
+    dg[before-1] = ''.join(sorted(dg[before-1]))
     return Diagram(after, dg)
 
-
-def solve(pos_storage, lvl_subproblem, start, finish):
-    print(len(pos_storage))
-    mincost = NOT_SAFE
-    if len(finish.dg[-1]) < 5: print(finish)
-    if start == finish:
-        mincost = 0
-    elif (lvl_subproblem, get_diagram_code(finish)) in pos_storage:
-        mincost = pos_storage[(lvl_subproblem, get_diagram_code(finish))]
-    elif lvl_subproblem <= 0:
-        mincost = NOT_SAFE
+def solve(start, finish):
+    start_visited = {}
+    finish_visited = {}
+    start_visited[get_diagram_code(start)] = 0
+    finish_visited[get_diagram_code(finish)] = 0
+    start_moves = [start]
+    finish_moves = [finish]
+    count = 1
+    while(count < 100):
+        print('count = {0}'.format(count))
+        start_moves = process_nxt_lvl(start_moves, start_visited)
+        finish_moves = process_nxt_lvl(finish_moves, finish_visited)
+        for mv in start_moves: start_visited[get_diagram_code(mv)] = count 
+        for mv in finish_moves: finish_visited[get_diagram_code(mv)] = count
+        common = set(start_visited.keys()) & set(finish_visited.keys())
+        if common:
+            dist = []
+            for c in common:
+                dist.append(start_visited[c] + finish_visited[c])
+            print min(dist)
+            break
+        count += 1
+        print('fwd nodes visited = {0}'.format(len(start_visited)))
+        print('bk nodes visited = {0}'.format(len(finish_visited)))
     else:
-        for move in create_adjacent_positions(finish, 4, 1):
-            if eval_cost(move) == NOT_SAFE:
-                cost = NOT_SAFE
-            else:
-                cost = solve(pos_storage, lvl_subproblem-1, start, move) + eval_cost(move)
-            pos_storage[(lvl_subproblem, get_diagram_code(move))] = cost
-            if cost < mincost: 
-                mincost = cost
-    return mincost
+        print 'no common moves'
+        return 'ERROR'
+    return 'woohoo'
 
+def process_nxt_lvl(prev_lvl, visited):
+    moves = []
+    seen_in_lvl = set()
+    for dg in prev_lvl:
+        for mv in create_adjacent_positions(dg):
+            code = get_diagram_code(mv)
+            if code not in visited and code not in seen_in_lvl:
+                if eval_cost(mv) == 1:
+                    moves.append(mv)
+                    seen_in_lvl.add(code)
+    return moves
+        
 def get_diagram_code(dg):
     s = str(dg.e_pos)
     index = 1
@@ -97,16 +123,6 @@ def get_diagram_code(dg):
 
 Diagram = collections.namedtuple('Diagram', ['e_pos', 'dg'])
 
-starting_diagram = Diagram(1,[[c for c in 'ABCDEIJ'],['F', 'H'],[],[]])
-finishing_diagram = Diagram(4,[[],[],[],[c for c in 'ABCDEFGHIJ']])
-unsafe_diagram = Diagram(2, [[c for c in 'AFGHI'],[],[],[]])
-print(eval_cost(starting_diagram))
-print(eval_cost(finishing_diagram))
-print(eval_cost(unsafe_diagram))
-for move in create_adjacent_positions(finishing_diagram, 4, 1):
-    print(move)
-    print(eval_cost(move))
-    print(get_diagram_code(move))
-
-pos_storage = {}
-print(solve(pos_storage, 70, starting_diagram, finishing_diagram))
+starting_diagram = Diagram(1, ('ABCDEGIJKLMN', 'FH', '', ''))
+finishing_diagram = Diagram(4, ('', '','', 'ABCDEFGHIJKLMN'))
+print(solve(starting_diagram, finishing_diagram))
